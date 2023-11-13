@@ -25,7 +25,7 @@ MATCH = -3
 INDEL = 5
 SUB = 1
 
-DEBUG = False
+DEBUG = True
 
 class direction(Enum):
 	LEFT = 1
@@ -47,13 +47,13 @@ class GeneSequencing:
 			return SUB # If the characters are different but still comparing diagonally
 		else: #If we are comparing left or top, so its always an indel
 			return INDEL
-	def is_valid(self, rowIndex, colIndex, bandWidth):
-		return abs(rowIndex - colIndex) <= bandWidth
+	def is_valid(self, rowIndex, colIndex):
+		return abs(rowIndex - colIndex) <= MAXINDELS
 	
-	def start_index(self, rowIndex, bandWidth):
-		return max(0, rowIndex - bandWidth)
-	def end_index(self, rowIndex, bandWidth, length):
-		return min(length, rowIndex + bandWidth + 1)
+	def start_index(self, rowIndex):
+		return max(0, rowIndex - MAXINDELS)
+	def end_index(self, rowIndex, length):
+		return min(length, rowIndex + MAXINDELS + 1)
 	# def findAllScoresForOne(self, seq1, seq2, scoreDict):
 
 # This is the method called by the GUI.  _seq1_ and _seq2_ are two sequences to be aligned, _banded_ is a boolean that tells
@@ -62,8 +62,8 @@ class GeneSequencing:
 
 	def align(self, seq1: str, seq2: str, banded, align_length):
 
-		# if(banded and DEBUG):
-		# 	print("This is banded:", align_length, "\n")
+		seq1 = seq1[:align_length]
+		seq2 = seq2[:align_length]
 
 		#Check to see if the sequences are the same first
 		if(seq1 == seq2):
@@ -71,16 +71,14 @@ class GeneSequencing:
 			return {'align_cost': cost, 'seqi_first100':'', 'seqj_first100':''}
 
 		#Check to see if answer is in bound aka valid
-		if (banded and abs(len(seq1) - len(seq2)) > align_length):
+		if (banded and abs(len(seq1) - len(seq2)) > MAXINDELS):
 			return {'align_cost': float('inf'), 'Not in banded segment':'', 'Not in banded segment':''}
 		
 		self.banded = banded
-		self.MaxCharactersToAlign = align_length
+		self.MaxCharactersToAlign = MAXINDELS
 
 ###################################################################################################
 # your code should replace these three statements and populate the three variables: score, alignment1 and alignment2
-
-
 		
 		#MY_STORAGE section
 		scoreDict = {} #Make a new dictionary that stores the score of each cell from the grid values
@@ -94,15 +92,12 @@ class GeneSequencing:
 		if (banded):
 			# Start on the first row and run down and fill it out, then do the next row
 			for rowIndex in range(len(seq1)):
-				for colIndex in range(self.start_index(rowIndex, align_length), self.end_index(rowIndex, align_length, len(seq2))):
-					# if(not self.is_valid(rowIndex,colIndex, align_length)):
-					# 	print("THIS SHOULD NOT PRINT TEST!!!")
-					# 	continue
+				for colIndex in range(self.start_index(rowIndex), self.end_index(rowIndex, len(seq2))):
 					# if DEBUG:
 					# 	print("i: ", rowIndex, "j: ", colIndex)
 					bestScore : float = float('inf')
 					#Is the self.is_valid too expensive? Type hinting seems fine.
-					if (rowIndex > 0 and self.is_valid(rowIndex-1,colIndex, align_length)): #We can try pulling from the left
+					if (rowIndex > 0 and self.is_valid(rowIndex-1,colIndex)): #We can try pulling from the left
 						compareScore : int = self.compareC(seq1[rowIndex], seq2[rowIndex], direction.LEFT) #Compare the two characters
 						finalScore = scoreDict[(rowIndex-1,colIndex)] + compareScore
 						if (finalScore < bestScore): #If this is the best score, store it
@@ -110,7 +105,7 @@ class GeneSequencing:
 							scoreDict[(rowIndex,colIndex)] = finalScore
 							directionDict[(rowIndex,colIndex)] = direction.LEFT
 
-					if (colIndex > 0 and self.is_valid(rowIndex,colIndex -1, align_length)): #We can try pulling from the top
+					if (colIndex > 0 and self.is_valid(rowIndex,colIndex -1)): #We can try pulling from the top
 						compareScore : int = self.compareC(seq1[rowIndex], seq2[rowIndex], direction.TOP)
 						finalScore = scoreDict[(rowIndex,colIndex-1)] + compareScore
 						if (finalScore < bestScore): #If this is the best score, store it
@@ -128,26 +123,33 @@ class GeneSequencing:
 		else: #Not banded
 			for rowIndex in range(len(seq1)):
 				for colIndex in range(len(seq2)):
-					# if DEBUG:
-					# 	print("i: ", rowIndex, "j: ", colIndex)
 					bestScore : float = scoreDict.get((rowIndex,colIndex), float('inf')) #Get the best score from the dictionary, if it doesnt exist, return an infinity
-					#Is the self.is_valid too expensive? Type hinting seems fine.
+
 					if (rowIndex > 0): #We can try pulling from the left
-						compareScore : int = self.compareC(seq1[rowIndex], seq2[rowIndex], direction.LEFT) #Compare the two characters
+						compareScore : int = self.compareC(seq1[rowIndex], seq2[colIndex], direction.LEFT) #Compare the two characters
 						finalScore = scoreDict[(rowIndex-1,colIndex)] + compareScore
 						if (finalScore < bestScore): #If this is the best score, store it
-							scoreDict[(rowIndex,colIndex)] = ScoreAndDirection(score=finalScore, direction=direction.LEFT)
+							bestScore = finalScore
+							scoreDict[(rowIndex,colIndex)] = finalScore
+							directionDict[(rowIndex,colIndex)] = direction.LEFT
+
 					if (colIndex > 0): #We can try pulling from the top
-						compareScore : int = self.compareC(seq1[rowIndex], seq2[rowIndex], direction.TOP)
+						compareScore : int = self.compareC(seq1[rowIndex], seq2[colIndex], direction.TOP)
 						finalScore = scoreDict[(rowIndex,colIndex-1)] + compareScore
 						if (finalScore < bestScore): #If this is the best score, store it
-							scoreDict[(rowIndex,colIndex)] = ScoreAndDirection(score=finalScore, direction=direction.TOP)
+							bestScore = finalScore
+							scoreDict[(rowIndex,colIndex)] = finalScore
+							directionDict[(rowIndex,colIndex)] = direction.TOP
+
 					if (rowIndex > 0 and colIndex > 0): #We can try pulling from the diagonal
-						compareScore : int = self.compareC(seq1[rowIndex], seq2[rowIndex], direction.DIAGONAL)
+						compareScore : int = self.compareC(seq1[rowIndex], seq2[colIndex], direction.DIAGONAL)
 						finalScore = scoreDict[(rowIndex-1,colIndex-1)] + compareScore
 						if (finalScore < bestScore):
-							scoreDict[(rowIndex,colIndex)] = ScoreAndDirection(score=finalScore, direction=direction.DIAGONAL)
+							bestScore = finalScore
+							scoreDict[(rowIndex,colIndex)] = finalScore
+							directionDict[(rowIndex,colIndex)] = direction.DIAGONAL
 		
+		#ALIGNMENT section
 		# if(DEBUG):
 		# 	self.printDict(scoreDict)
 		
