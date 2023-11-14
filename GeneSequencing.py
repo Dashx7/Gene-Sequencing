@@ -59,7 +59,10 @@ class GeneSequencing:
 		alignment2 = []
 		rowIndex, colIndex = len(seq1), len(seq2)
 
-		while rowIndex > 0 and colIndex > 0:
+		# self.printDict(directionDict)
+
+		while rowIndex != 0 or colIndex != 0: #If its 0, then we are at the edge cases which we stop
+			
 			currentDirection = directionDict[(rowIndex, colIndex)]
 
 			if currentDirection == direction.DIAGONAL:
@@ -68,13 +71,13 @@ class GeneSequencing:
 				rowIndex -= 1
 				colIndex -= 1
 			elif currentDirection == direction.LEFT:
-				alignment1.append(seq1[rowIndex-1])
-				alignment2.append('-')
-				rowIndex -= 1
-			elif currentDirection == direction.TOP:
 				alignment1.append('-')
 				alignment2.append(seq2[colIndex-1])
 				colIndex -= 1
+			elif currentDirection == direction.TOP:
+				alignment1.append(seq1[rowIndex-1])
+				alignment2.append('-')
+				rowIndex -= 1
 			elif currentDirection == direction.NONE:
 				alignment1.append(seq1[rowIndex-1])
 				alignment2.append(seq2[colIndex-1])
@@ -91,7 +94,7 @@ class GeneSequencing:
 # you whether you should compute a banded alignment or full alignment, and _align_length_ tells you
 # how many base pairs to use in computing the alignment
 
-	def align(self, seq1: str, seq2: str, banded, align_length):
+	def align(self, seq1: str, seq2: str, banded, align_length): #The core of the algorithm
 		self.banded = banded
 		self.MaxCharactersToAlign = MAXINDELS
 		
@@ -99,9 +102,9 @@ class GeneSequencing:
 		seq2 = seq2[:align_length]
 
 		#Check to see if the sequences are the same first
-		# if(seq1 == seq2):
-		# 	cost = -3 * len(seq1)
-		# 	return {'align_cost': cost, 'seqi_first100':'', 'seqj_first100':''}
+		if(seq1 == seq2):
+			cost = -3 * len(seq1)
+			return {'align_cost': cost, 'seqi_first100':'', 'seqj_first100':''}
 
 		#Check to see if answer is in bound aka valid
 		if (banded and abs(len(seq1) - len(seq2)) > MAXINDELS):
@@ -113,73 +116,79 @@ class GeneSequencing:
 		# ROW FIRST, the COLUMN 
 
 		# Initialize the zeroth row and column
-		for i in range(len(seq1) + 1):
-			scoreDict[(i, 0)] = i * INDEL
-			directionDict[(i, 0)] = direction.TOP
+		if banded: #When its banded, we need to initialize the first row and column differently
+			for i in range(MAXINDELS+1):
+				scoreDict[(i, 0)] = i * INDEL
+				directionDict[(i, 0)] = direction.TOP
 
-		for j in range(len(seq2) + 1):
-			scoreDict[(0, j)] = j * INDEL
-			directionDict[(0, j)] = direction.LEFT
+			for j in range(MAXINDELS+1):
+				scoreDict[(0, j)] = j * INDEL
+				directionDict[(0, j)] = direction.LEFT
+		else: #When its not banded, we need to initialize the first row and column differently
+			for i in range(len(seq1)+1):
+				scoreDict[(i, 0)] = i * INDEL
+				directionDict[(i, 0)] = direction.TOP
 
-		myScore : int = self.compareC(seq1[0], seq2[0], direction.DIAGONAL) 
-		scoreDict[(1,1)] = myScore
-		directionDict[(1,1)] = direction.NONE
+			for j in range(len(seq2)+1):
+				scoreDict[(0, j)] = j * INDEL
+				directionDict[(0, j)] = direction.LEFT
+				
+			
 
 		if (banded):
 			# Start on the first row and run down and fill it out, then do the next row
 			for rowIndex in range(len(seq1)):
 				for colIndex in range(self.start_index(rowIndex), self.end_index(rowIndex, len(seq2))):
-					# if DEBUG:
-					# 	print("i: ", rowIndex, "j: ", colIndex)
 					bestScore : float = float('inf')
-					if (self.is_valid(rowIndex-1,colIndex)): #We can try pulling from the left
-						compareScore : int = self.compareC(seq1[rowIndex], seq2[rowIndex], direction.LEFT) #Compare the two characters
+					if (self.is_valid(rowIndex-1,colIndex)): #We can try pulling from the top
+						compareScore : int = self.compareC(seq1[rowIndex], seq2[colIndex], direction.LEFT) #Compare the two characters
 						finalScore = scoreDict[(rowIndex,colIndex+1)] + compareScore
-						if (finalScore < bestScore): #If this is the best score, store it
-							bestScore = finalScore
-							scoreDict[(rowIndex+1,colIndex+1)] = finalScore
-							directionDict[(rowIndex+1,colIndex+1)] = direction.LEFT
-
-					if (self.is_valid(rowIndex,colIndex -1)): #We can try pulling from the top
-						compareScore : int = self.compareC(seq1[rowIndex], seq2[rowIndex], direction.TOP)
-						finalScore = scoreDict[(rowIndex+1,colIndex)] + compareScore
 						if (finalScore < bestScore): #If this is the best score, store it
 							bestScore = finalScore
 							scoreDict[(rowIndex+1,colIndex+1)] = finalScore
 							directionDict[(rowIndex+1,colIndex+1)] = direction.TOP
 
+					if (self.is_valid(rowIndex,colIndex -1)): #We can try pulling from the left
+						compareScore : int = self.compareC(seq1[rowIndex], seq2[colIndex], direction.TOP)
+						finalScore = scoreDict[(rowIndex+1,colIndex)] + compareScore
+						if (finalScore < bestScore): #If this is the best score, store it
+							bestScore = finalScore
+							scoreDict[(rowIndex+1,colIndex+1)] = finalScore
+							directionDict[(rowIndex+1,colIndex+1)] = direction.LEFT
+
 					#We can try pulling from the diagonal
-					compareScore : int = self.compareC(seq1[rowIndex], seq2[rowIndex], direction.DIAGONAL)
+					compareScore : int = self.compareC(seq1[rowIndex], seq2[colIndex], direction.DIAGONAL)
 					finalScore = scoreDict[(rowIndex,colIndex)] + compareScore
 					if (finalScore < bestScore):
 						bestScore = finalScore
 						scoreDict[(rowIndex+1,colIndex+1)] = finalScore
 						directionDict[(rowIndex+1,colIndex+1)] = direction.DIAGONAL
-		else: #Not banded
+		else: #Not banded algorithm section
 			# Start on the first row and run down and fill it out, then do the next row
 			for rowIndex in range(len(seq1)):
 				for colIndex in range(len(seq2)):
 					# if DEBUG:
 					# 	print("i: ", rowIndex, "j: ", colIndex)
 					bestScore : float = float('inf')
+
 					#We can try pulling from the left
-					compareScore : int = self.compareC(seq1[rowIndex], seq2[rowIndex], direction.LEFT) #Compare the two characters
-					finalScore = scoreDict[(rowIndex,colIndex+1)] + compareScore
+					compareScore : int = self.compareC(seq1[rowIndex], seq2[colIndex], direction.TOP)
+					finalScore = scoreDict[(rowIndex+1,colIndex)] + compareScore
 					if (finalScore < bestScore): #If this is the best score, store it
 						bestScore = finalScore
 						scoreDict[(rowIndex+1,colIndex+1)] = finalScore
 						directionDict[(rowIndex+1,colIndex+1)] = direction.LEFT
 
-					#We can try pulling from the top
-					compareScore : int = self.compareC(seq1[rowIndex], seq2[rowIndex], direction.TOP)
-					finalScore = scoreDict[(rowIndex+1,colIndex)] + compareScore
+					#We can try pulling from the Top
+					compareScore : int = self.compareC(seq1[rowIndex], seq2[colIndex], direction.LEFT) #Compare the two characters
+					finalScore = scoreDict[(rowIndex,colIndex+1)] + compareScore
 					if (finalScore < bestScore): #If this is the best score, store it
 						bestScore = finalScore
 						scoreDict[(rowIndex+1,colIndex+1)] = finalScore
 						directionDict[(rowIndex+1,colIndex+1)] = direction.TOP
 
 					#We can try pulling from the diagonal
-					compareScore : int = self.compareC(seq1[rowIndex], seq2[rowIndex], direction.DIAGONAL)
+					compareScore : int = self.compareC(seq1[rowIndex], seq2[colIndex], direction.DIAGONAL)
 					finalScore = scoreDict[(rowIndex,colIndex)] + compareScore
 					if (finalScore < bestScore):
 						bestScore = finalScore
@@ -187,16 +196,11 @@ class GeneSequencing:
 						directionDict[(rowIndex+1,colIndex+1)] = direction.DIAGONAL
 
 		
-		score:int = scoreDict[(len(seq1),len(seq2))]
+		score:int = scoreDict[(len(seq1),len(seq2))] #Get the score from the last cell and thats our return value
 
-		returnVal = self.backtrack(seq1, seq2, directionDict)
+		returnVal = self.backtrack(seq1, seq2, directionDict) #Get the alignment from the backtrack function
+		
 		alignment1 = returnVal[0][:100]
 		alignment2 = returnVal[1][:100]
-
-		# alignment1 = 'abc-easy  DEBUG:({} chars,align_len={}{})'.format(
-		# 	len(seq1), align_length, ',BANDED' if banded else '')
-		# alignment2 = 'as-123--  DEBUG:({} chars,align_len={}{})'.format(
-		# 	len(seq2), align_length, ',BANDED' if banded else '')
-###################################################################################################
 
 		return {'align_cost':score, 'seqi_first100':alignment1, 'seqj_first100':alignment2}

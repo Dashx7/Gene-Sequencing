@@ -25,7 +25,6 @@ from GeneSequencing import *
 
 
 class Proj4GUI( QMainWindow ):
-
 	def __init__( self ):
 		super(Proj4GUI,self).__init__()
 
